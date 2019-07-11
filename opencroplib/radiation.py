@@ -19,10 +19,12 @@ import numpy
 from .atmophere import dew_point, ea_calc
 
 __author__ = "Jose A. Jimenez-Berni  <berni@ias.csic.es>"
-__version__ = "0.1.2"
-__date__ = "March 2018"
+__version__ = "0.1.3"
+__date__ = "July 2019"
 
-BOLTZMANN = 5.670373e-8
+BOLTZMANN = 5.670373e-8  # [W m-2 K-4]
+BOLTZMANN_HOURLY = 5.107e-11  # [MJ K-4 m-2 hour-1]
+STEFAN_BOLTZMANN_CONSTANT = 0.000000004903  # [MJ K-4 m-2 day-1]
 SUPPORTED_ATMOSPHERIC_EMISSIVITY_MODELS = ['B75', 'Swinbank', 'BM']
 #: Solar constant [ MJ m-2 min-1]
 SOLAR_CONSTANT = 0.0820
@@ -49,9 +51,9 @@ def planck(temperature_kelvin, wavelength=10.25):
 
     c1 = 1.1910427e-22
     c2 = 1.4387752e-2
-    cwl = wavelength*1e-6
+    cwl = wavelength * 1e-6
 
-    return c1/numpy.power(cwl, 5)/(numpy.exp(c2/temperature_kelvin/cwl)-1.0)
+    return c1 / numpy.power(cwl, 5) / (numpy.exp(c2 / temperature_kelvin / cwl) - 1.0)
 
 
 def iplanck(radiance, wavelength=10.25):
@@ -76,9 +78,9 @@ def iplanck(radiance, wavelength=10.25):
     c = 2.9979246e8
     k = 1.380658e-23
 
-    cwl = wavelength*1e-6
+    cwl = wavelength * 1e-6
 
-    return h*c/(k*cwl)/numpy.log((2.0*h*c*c)/(radiance*1e6*numpy.power(cwl, 5)) + 1.0)
+    return h * c / (k * cwl) / numpy.log((2.0 * h * c * c) / (radiance * 1e6 * numpy.power(cwl, 5)) + 1.0)
 
 
 def longwave_downwelling(air_temperature, relative_humidity, cloudiness_factor=0, emissivity_model='B75'):
@@ -113,7 +115,7 @@ def longwave_downwelling(air_temperature, relative_humidity, cloudiness_factor=0
 
     if emissivity_model not in SUPPORTED_ATMOSPHERIC_EMISSIVITY_MODELS:
         raise ValueError('{foo} model not supported. Choose between {supported}'.format(foo=repr(emissivity_model),
-                                                              supported=SUPPORTED_ATMOSPHERIC_EMISSIVITY_MODELS))
+                                                                                        supported=SUPPORTED_ATMOSPHERIC_EMISSIVITY_MODELS))
 
     ea_t = ea_calc(air_temperature, relative_humidity) * 0.01
 
@@ -121,17 +123,17 @@ def longwave_downwelling(air_temperature, relative_humidity, cloudiness_factor=0
 
     if emissivity_model == 'B75':
         atmospheric_emissivity = (cloudiness_factor + (1 - cloudiness_factor) * (
-            1.24 * numpy.power(ea_t / (air_temperature + 273.15), 1.0 / 7.0)))
+                1.24 * numpy.power(ea_t / (air_temperature + 273.15), 1.0 / 7.0)))
     elif emissivity_model == 'Swinbank':
         atmospheric_emissivity = (
-            cloudiness_factor + (1 - cloudiness_factor) * (9.36 * 1e-6 * numpy.power(air_temperature + 273.15, 2)))
+                cloudiness_factor + (1 - cloudiness_factor) * (9.36 * 1e-6 * numpy.power(air_temperature + 273.15, 2)))
     elif emissivity_model == 'BM':
-        dew_t = dew_point(air_temperature, relative_humidity)/100
+        dew_t = dew_point(air_temperature, relative_humidity) / 100
         a = 0.711
         b = 0.56
         c = 0.73
         atmospheric_emissivity = (
-            cloudiness_factor + (1 - cloudiness_factor) * (a + b * dew_t + c * numpy.power(dew_t, 2)))
+                cloudiness_factor + (1 - cloudiness_factor) * (a + b * dew_t + c * numpy.power(dew_t, 2)))
 
     lwd_sim = atmospheric_emissivity * BOLTZMANN * numpy.power(air_temperature + 273.15, 4)
 
@@ -163,7 +165,8 @@ def available_energy(shortwave, albedo, longwave, canopy_temperature, emissivity
     Union[ndarray, float]: total available energy or net radiation [W/m2]
 
     """
-    return (1.0 - albedo) * shortwave + emissivity * (longwave - BOLTZMANN * numpy.power(canopy_temperature + 273.15, 4))
+    return (1.0 - albedo) * shortwave + emissivity * (
+                longwave - BOLTZMANN * numpy.power(canopy_temperature + 273.15, 4))
 
 
 def solar_declination(doy):
@@ -313,7 +316,7 @@ def potential_irradiance(latitude, doy, solar_h, altitude=0, t_lk=1):
 
     ext_rad = toa_irradiance(doy)
     dh = 0.061359 * (0.1594 + 1.123 * s_elev_d + 0.065656 * s_elev_d * s_elev_d) / (
-        1.0 + 28.9344 * s_elev_d + 277.3971 * s_elev_d * s_elev_d)
+            1.0 + 28.9344 * s_elev_d + 277.3971 * s_elev_d * s_elev_d)
     href = s_elev_d + dh
     p_p0 = numpy.exp(-altitude / 8434.5)
 
@@ -324,7 +327,7 @@ def potential_irradiance(latitude, doy, solar_h, altitude=0, t_lk=1):
 
     m = p_p0 / (numpy.sin(numpy.radians(href)) + 0.50572 * numpy.power(href + 6.07995, -1.6364))
     dr = 1.0 / (
-        6.6296 + 1.7513 * m - numpy.power(0.1202 * m, 2) + numpy.power(0.0065 * m, 3) - numpy.power(0.00013 * m, 4))
+            6.6296 + 1.7513 * m - numpy.power(0.1202 * m, 2) + numpy.power(0.0065 * m, 3) - numpy.power(0.00013 * m, 4))
     if numpy.isscalar(dr):
         if m <= 20:
             dr = 1.0 / (10.4 + 0.718 * m)
@@ -343,8 +346,7 @@ def potential_irradiance(latitude, doy, solar_h, altitude=0, t_lk=1):
     return pot_irr
 
 
-def daily_potential_irradiance(latitude, day_of_year):
-
+def daily_potential_toa(latitude, day_of_year):
     """
     Estimate daily extraterrestrial radiation (*Ra*, 'top of the atmosphere
     radiation').
@@ -356,12 +358,8 @@ def daily_potential_irradiance(latitude, day_of_year):
     Reference should be made to the Smithsonian Tables to assess possible
     deviations."
     :param latitude: Latitude [radians]
-    :param sol_dec: Solar declination [radians]. Can be calculated using
-        ``sol_dec()``.
-    :param sha: Sunset hour angle [radians]. Can be calculated using
-        ``sunset_hour_angle()``.
-    :param ird: Inverse relative distance earth-sun [dimensionless]. Can be
-        calculated using ``inv_rel_dist_earth_sun()``.
+    :param day_of_year: Day of the year
+
     :return: Daily extraterrestrial radiation [MJ m-2 day-1]
     :rtype: float
     """
@@ -376,6 +374,20 @@ def daily_potential_irradiance(latitude, day_of_year):
     tmp2 = sha * numpy.sin(lat_r) * numpy.sin(sol_dec)
     tmp3 = numpy.cos(lat_r) * numpy.cos(sol_dec) * numpy.sin(sha)
     return tmp1 * SOLAR_CONSTANT * ird * (tmp2 + tmp3)
+
+
+def daily_clear_sky_irradiance(altitude, et_rad):
+    """
+    Estimate clear sky radiation from altitude and extraterrestrial radiation.
+    Based on equation 37 in Allen et al (1998) which is recommended when
+    calibrated Angstrom values are not available.
+    :param altitude: Elevation above sea level [m]
+    :param et_rad: Extraterrestrial radiation [MJ m-2 day-1]. Can be
+        estimated using ``et_rad()``.
+    :return: Clear sky radiation [MJ m-2 day-1]
+    :rtype: float
+    """
+    return (0.00002 * altitude + 0.75) * et_rad
 
 
 def inv_rel_dist_earth_sun(day_of_year):
@@ -413,13 +425,13 @@ def sunset_hour_angle(latitude, sol_dec):
     # See http://www.itacanet.org/the-sun-as-a-source-of-energy/
     # part-3-calculating-solar-angles/
     # Domain of acos is -1 <= x <= 1 radians (this is not mentioned in FAO-56!)
-    return numpy.acos(min(max(cos_sha, -1.0), 1.0))
+    return numpy.arccos(numpy.clip(cos_sha, -1.0, 1.0))
 
 
-def net_out_lw_rad(tmin_k, tmax_k, sol_rad, cs_rad, avp):
+def net_out_lw_daily(tmin, tmax, sol_rad, cs_rad, avp):
     """
     Estimate net outgoing longwave radiation.
-    This is the net longwave energy (net energy flux) leaving the
+    This is the net longwave energy (daily net energy flux) leaving the
     earth's surface. It is proportional to the absolute temperature of
     the surface raised to the fourth power according to the Stefan-Boltzmann
     law. However, water vapour, clouds, carbon dioxide and dust are absorbers
@@ -430,8 +442,8 @@ def net_out_lw_rad(tmin_k, tmax_k, sol_rad, cs_rad, avp):
     The output can be converted to equivalent evaporation [mm day-1] using
     ``energy2evap()``.
     Based on FAO equation 39 in Allen et al (1998).
-    :param tmin: Absolute daily minimum temperature [degrees Kelvin]
-    :param tmax: Absolute daily maximum temperature [degrees Kelvin]
+    :param tmin: Absolute daily minimum temperature [degrees Celsius]
+    :param tmax: Absolute daily maximum temperature [degrees Celsius]
     :param sol_rad: Solar radiation [MJ m-2 day-1]. If necessary this can be
         estimated using ``sol_rad()``.
     :param cs_rad: Clear sky radiation [MJ m-2 day-1]. Can be estimated using
@@ -441,12 +453,39 @@ def net_out_lw_rad(tmin_k, tmax_k, sol_rad, cs_rad, avp):
     :return: Net outgoing longwave radiation [MJ m-2 day-1]
     :rtype: float
     """
-    STEFAN_BOLTZMANN_CONSTANT = 0.000000004903
 
     tmp1 = (STEFAN_BOLTZMANN_CONSTANT *
-        ((numpy.pow(tmax_k, 4) + numpy.pow(tmin_k, 4)) / 2))
+            ((numpy.power(tmax+273.15, 4) + numpy.power(tmin+273.15, 4)) / 2))
     tmp2 = (0.34 - (0.14 * numpy.sqrt(avp)))
     tmp3 = 1.35 * (sol_rad / cs_rad) - 0.35
+    return tmp1 * tmp2 * tmp3
+
+
+def net_out_lw_hourly(t_mean, relative_humidity, daily_clearness):
+    """
+    Estimate net outgoing longwave radiation.
+    This is the net longwave energy (hourly net energy flux) leaving the
+    earth's surface. It is proportional to the absolute temperature of
+    the surface raised to the fourth power according to the Stefan-Boltzmann
+    law. However, water vapour, clouds, carbon dioxide and dust are absorbers
+    and emitters of longwave radiation. This function corrects the Stefan-
+    Boltzmann law for humidity (using actual vapor pressure) and cloudiness
+    (using solar radiation and clear sky radiation). The concentrations of all
+    other absorbers are assumed to be constant.
+    The output can be converted to equivalent evaporation [mm day-1] using
+    ``energy2evap()``.
+    Based on FAO equation 39 in Allen et al (1998).
+    :param t_mean: Hourly mean temperature [degrees Celsius]
+    :param relative_humidity: Hourly mean relative humidity [%]
+    :param daily_clearness: clearness index calculated as Rs/Rs_clear_sky.
+    :return: Net outgoing longwave radiation [MJ m-2 day-1]
+    :rtype: float
+    """
+
+    avp = ea_calc(t_mean, relative_humidity)
+    tmp1 = (BOLTZMANN_HOURLY * numpy.power((t_mean+273.15), 4))
+    tmp2 = (0.34 - (0.14 * numpy.sqrt(avp)))
+    tmp3 = 1.35 * daily_clearness - 0.35
     return tmp1 * tmp2 * tmp3
 
 
@@ -490,3 +529,84 @@ def net_rad(ni_sw_rad, no_lw_rad):
     :rtype: float
     """
     return ni_sw_rad - no_lw_rad
+
+
+# Below, different formulations for calculating longwave radiation
+# They need to be documented accordingly
+
+def longwave_downwelling_1(air_temperature, relative_humidity):
+    """
+    Function to calculate the longwave downwelling radiation from the air temperature and relative humidity
+    Reference:
+
+
+    Parameters
+    ----------
+    relative_humidity : float
+     Relative humidity [%]
+    air_temperature : float
+     Air temperature [Celsius]
+
+    Returns
+    -------
+    float: longwave downwelling radiation [W/m2]
+
+    """
+
+    ea_t = ea_calc(air_temperature, relative_humidity) * 0.01
+
+    lwd_sim = (0.64 + 0.044 * numpy.sqrt(ea_t)) * \
+              BOLTZMANN * numpy.power(air_temperature + 273.15, 4)
+    return lwd_sim
+
+
+def longwave_downwelling_2(air_temperature, relative_humidity):
+    """
+    Function to calculate the longwave downwelling radiation from the air temperature and relative humidity
+
+    Reference...
+
+    Parameters
+    ----------
+    relative_humidity : float
+        Relative humidity [%]
+    air_temperature : float
+        Air temperature [Celsius]
+
+    Returns
+    -------
+    float: longwave downwelling radiation [W/m2]
+
+    """
+
+    ea_t = ea_calc(air_temperature, relative_humidity) * 0.01
+
+    lwd_sim = (0.7 + 0.0000595 * ea_t * numpy.exp(1500.0 / (air_temperature + 273.15))) * \
+              BOLTZMANN * numpy.power(air_temperature + 273.15, 4)
+    return lwd_sim
+
+
+def longwave_downwelling_3(air_temperature, relative_humidity):
+    """
+    Function to calculate the longwave downwelling radiation from the air temperature and relative humidity
+
+    Reference...
+
+    Parameters
+    ----------
+    relative_humidity : float
+        Relative humidity [%]
+    air_temperature : float
+        Air temperature [Celsius]
+
+    Returns
+    -------
+    float: longwave downwelling radiation [W/m2]
+
+    """
+
+    ea_t = ea_calc(air_temperature, relative_humidity) * 0.01
+
+    lwd_sim = (0.3 + 0.7 * 1.24 * numpy.power(ea_t / (air_temperature + 273.15), 1.0 / 7.0)) * \
+              BOLTZMANN * numpy.power(air_temperature + 273.15, 4)
+    return lwd_sim
