@@ -23,7 +23,7 @@ __date__ = "July 2017"
 
 
 def aerodynamic_resistance_viney(wind_speed, air_temperature, canopy_temperature, canopy_height, measurement_height,
-                                 d_ratio=2/3.0, z0m_ratio=0.13, z0h_ratio=0.13):
+                                 d_ratio=2 / 3.0, z0m_ratio=0.13, z0h_ratio=0.13):
     """
     Calculates aerodynamic resistance based on Viney 1991
 
@@ -61,7 +61,7 @@ def aerodynamic_resistance_viney(wind_speed, air_temperature, canopy_temperature
     d = d_ratio * canopy_height
     zom = z0m_ratio * canopy_height
     zoh = z0h_ratio * canopy_height
-    logaritmic_profile_ym = numpy.log((measurement_height - d) / zom)
+    logarithmic_profile_ym = numpy.log((measurement_height - d) / zom)
 
     # Set a minimum speed of 0.1 to avoid math issues
     if numpy.isscalar(wind_speed):
@@ -71,26 +71,27 @@ def aerodynamic_resistance_viney(wind_speed, air_temperature, canopy_temperature
         wind_speed[wind_speed == 0] = 0.1
 
     wind_speed_canopy = 1.82 * wind_speed * (numpy.log((measurement_height - d) / zom)) / numpy.log((100.0 - d) / zom)
-    a = 1.0591 - 0.0552 * numpy.log(1.72 + numpy.power(4.03 - logaritmic_profile_ym, 2))
-    b = 1.9117 - 0.2237 * numpy.log(1.86 + numpy.power(2.12 - logaritmic_profile_ym, 2))
-    c = 0.8437 - 0.1243 * numpy.log(3.49 + numpy.power(2.79 - logaritmic_profile_ym, 2))
+    a = 1.0591 - 0.0552 * numpy.log(1.72 + numpy.power(4.03 - logarithmic_profile_ym, 2))
+    b = 1.9117 - 0.2237 * numpy.log(1.86 + numpy.power(2.12 - logarithmic_profile_ym, 2))
+    c = 0.8437 - 0.1243 * numpy.log(3.49 + numpy.power(2.79 - logarithmic_profile_ym, 2))
     ra_prime = numpy.log((measurement_height - d) / zoh) * numpy.log((measurement_height - d) / zom) / (
-        k * k * wind_speed_canopy)
+            k * k * wind_speed_canopy)
     richardson_number = (measurement_height - d) * 9.81 * (air_temperature - canopy_temperature) / (
-        wind_speed_canopy * wind_speed_canopy * (air_temperature + 273.15))
+            wind_speed_canopy * wind_speed_canopy * (air_temperature + 273.15))
     if numpy.isscalar(richardson_number):
         if richardson_number > 0:
             return ra_prime
         else:
             return ra_prime / (a + b * numpy.power(-richardson_number, c))
     else:
-        ra_prime[richardson_number <= 0] = ra_prime / (
-            a + b * numpy.power(-richardson_number[richardson_number <= 0], c))
+        ra_prime[richardson_number <= 0] = ra_prime[richardson_number <= 0] / (
+                a[richardson_number <= 0] + b[richardson_number <= 0] * numpy.power(
+            -richardson_number[richardson_number <= 0], c[richardson_number <= 0]))
         return ra_prime
 
 
 def aerodynamic_resistance_fao(wind_speed, canopy_height, measurement_height,
-                               d_ratio=2/3.0, z0m_ratio=0.123, z0h_ratio=0.0123):
+                               d_ratio=2 / 3.0, z0m_ratio=0.123, z0h_ratio=0.0123):
     """
     Function to aerodynamic resistance based on FAO's Penman-Monteith
     Reference: http://www.fao.org/docrep/X0490E/x0490e06.htm#aerodynamic resistance (ra)
@@ -122,7 +123,6 @@ def aerodynamic_resistance_fao(wind_speed, canopy_height, measurement_height,
     zom = z0m_ratio * canopy_height
     zoh = z0h_ratio * canopy_height
 
-
     # Set a minimum speed of 0.1 to avoid math issues
     if numpy.isscalar(wind_speed):
         if wind_speed == 0:
@@ -132,7 +132,7 @@ def aerodynamic_resistance_fao(wind_speed, canopy_height, measurement_height,
 
     wind_speed_canopy = 1.82 * wind_speed * (numpy.log((measurement_height - d) / zom)) / numpy.log((100.0 - d) / zom)
     ra_s = numpy.log((measurement_height - d) / zoh) * numpy.log((measurement_height - d) / zom) / (
-        numpy.power(k, 2) * wind_speed_canopy)
+            numpy.power(k, 2) * wind_speed_canopy)
     return ra_s
 
 
@@ -187,7 +187,7 @@ def raupach_z0_d(canopy_height, area_index, frontal_leaf_area_factor=0.36):
         gamma_prime[gamma_prime > gamma_prime_max] = gamma_prime_max
 
     d_h = 1 - (1 - numpy.exp(-numpy.sqrt(cd1 * 2 * frontal_area_index))) / numpy.sqrt(cd1 * 2 * frontal_area_index)
-    z0mh = (1 - d_h) * numpy.exp(-k * 1/gamma_prime - psi_h)
+    z0mh = (1 - d_h) * numpy.exp(-k * 1 / gamma_prime - psi_h)
 
     raupach_z0 = canopy_height * z0mh
     raupach_d = canopy_height * d_h
@@ -195,7 +195,7 @@ def raupach_z0_d(canopy_height, area_index, frontal_leaf_area_factor=0.36):
     return raupach_z0, raupach_d
 
 
-def adjust_wind_height(wind_speed, z, measurement_height=2.0, d_ratio=2/3.0, z0m_ratio=0.13, z0h_ratio=0.13):
+def adjust_wind_height(wind_speed, z, measurement_height=2.0, d_ratio=2 / 3.0, z0m_ratio=0.13, z0h_ratio=0.13):
     """
         Function to aerodynamic resistance based on FAO's Penman-Monteith
         Reference: http://www.fao.org/docrep/X0490E/x0490e06.htm#aerodynamic resistance (ra)
@@ -225,8 +225,6 @@ def adjust_wind_height(wind_speed, z, measurement_height=2.0, d_ratio=2/3.0, z0m
     d = d_ratio * z
     zom = z0m_ratio * z
     zoh = z0h_ratio * z
-    logaritmic_profile_ym = numpy.log((measurement_height - d) / zom)
-
     # Set a minimum speed of 0.1 to avoid math issues
     if numpy.isscalar(wind_speed):
         if wind_speed == 0:

@@ -24,7 +24,7 @@ Calculation of ETo and ETa
 # Terms of use and citation
 This library is licensed under the MIT license.
 
-    Copyright 2017 Jose A. Jimenez-Berni
+    Copyright 2021 Jose A. Jimenez-Berni
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
