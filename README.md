@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/154101466.svg)](https://zenodo.org/badge/latestdoi/154101466)
+
 OpenCropLib
 ==============
 
@@ -32,6 +34,10 @@ Sample notebooks are available in the `sample_notebook` folder.
 
 # Terms of use and citation
 This library is licensed under the MIT license.
+
+You can cite this library as:
+
+Jose A. Jimenez-Berni. (2023). OpenAgriTech/opencroplib: v0.1.0 (v0.1.0). Zenodo. https://doi.org/10.5281/zenodo.8364969
 
 
 # References
