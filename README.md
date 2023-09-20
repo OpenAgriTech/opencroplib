@@ -12,7 +12,15 @@ estimation of physical processes such as aerodynamic modeling, calculation
 of solar radiation, etc.
 
 # Background
-Calculation of ETo and ETa
+
+The initial work in developing a simple energy balance model for its application with high-resolution thermal data and infrared thermometers started in my PhD. It was published in [Berni et al., 2009](http://dx.doi.org/10.1016/j.rse.2009.06.018) and was implemented as an Excel VB Macro. In 2017, I started porting the functions from the Excel macro into Python and developing a library that could use `pandas` data frames and efficiently process large weather and sensor data datasets. Some of the functions were adapted from PyETo to deal with `pandas` dataframes.
+
+The library is structured into different modules:
+* `radiation` for modeling and estimating various processes such as short/longwave radiation
+* `atmosphere` for all the vapor pressure calculations, dew point, air density, etc. 
+* `aerodynamic` as the source for different implementations of aerodynamic resistance calculations
+* `evapotranspiration` for calculating ETo using FAO56 or ASCE
+* `plant` for the calculation of canopy conductance, simulating canopy temperature, or sensible and latent heat calculations. 
 
 # Installation
 
@@ -20,23 +28,11 @@ Calculation of ETo and ETa
 
 # Examples
 
+Sample notebooks are available in the `sample_notebook` folder. 
 
 # Terms of use and citation
 This library is licensed under the MIT license.
 
-    Copyright 2021 Jose A. Jimenez-Berni
-
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
-
-        http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
 
 # References
 Allen, R. G., Pereira, L. S., Raes, D., and Smith, M. (1998). Crop evapotranspiration: guidelines for computing crop 
@@ -49,4 +45,4 @@ conductance and CWSI in olive orchards using high resolution thermal remote sens
 
 https://github.com/woodcrafty/PyETo
 
-
+https://github.com/WSWUP/RefET 
