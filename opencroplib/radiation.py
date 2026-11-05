@@ -30,16 +30,25 @@ __version__ = "0.1.3"
 __date__ = "July 2019"
 
 BOLTZMANN = 5.670373e-8  # [W m-2 K-4]
-BOLTZMANN_HOURLY = 5.107e-11  # [MJ K-4 m-2 hour-1]
+BOLTZMANN_HOURLY = 2.043e-10  # [MJ K-4 m-2 hour-1] (FAO-56: 4.903e-9 / 24)
 STEFAN_BOLTZMANN_CONSTANT = 0.000000004903  # [MJ K-4 m-2 day-1]
 SUPPORTED_ATMOSPHERIC_EMISSIVITY_MODELS = ['B75', 'Swinbank', 'BM']
+# Exact SI (2019) defining constants used by the Planck functions
+PLANCK_H = 6.62607015e-34  # [J s]
+SPEED_OF_LIGHT = 299792458.0  # [m s-1]
+BOLTZMANN_K = 1.380649e-23  # [J K-1]
+# First and second radiation constants: c1L = 2 h c^2 [W m2 sr-1], c2 = h c / k [m K]
+_C1L = 2.0 * PLANCK_H * SPEED_OF_LIGHT ** 2
+_C2 = PLANCK_H * SPEED_OF_LIGHT / BOLTZMANN_K
 #: Solar constant [ MJ m-2 min-1]
 SOLAR_CONSTANT = 0.0820
 
 
 def planck(temperature_kelvin, wavelength=10.25):
     """
-    Calculate Planck's black body thermal radiance for a given temperature and central wavelength
+    Calculate Planck's black body thermal radiance for a given temperature and central wavelength, with the exact
+    SI (2019) values of h, c and k (opencroplib < 0.2.0 used older CODATA values that differed between planck and
+    iplanck, so that the round trip was off by ~1.4 mK).
     Reference: https://ncc.nesdis.noaa.gov/data/planck.html
 
     Parameters
@@ -52,15 +61,14 @@ def planck(temperature_kelvin, wavelength=10.25):
     Returns
     -------
     float
-        Thermal radiance of the black body with a given temperature at a given wavelength [W/m2].
+        Spectral radiance of the black body with a given temperature at a given wavelength [W m-2 sr-1 um-1].
 
     """
 
-    c1 = 1.1910427e-22
-    c2 = 1.4387752e-2
     cwl = wavelength * 1e-6
 
-    return c1 / numpy.power(cwl, 5) / (numpy.exp(c2 / temperature_kelvin / cwl) - 1.0)
+    # 1e-6: per metre of wavelength -> per micrometre
+    return _C1L * 1e-6 / numpy.power(cwl, 5) / (numpy.exp(_C2 / temperature_kelvin / cwl) - 1.0)
 
 
 def iplanck(radiance, wavelength=10.25):
@@ -73,7 +81,7 @@ def iplanck(radiance, wavelength=10.25):
     wavelength : float
         Central wavelength used for the calculation [micrometers]. Default is 10.25um
     radiance : float
-        Thermal radiance of the black body with a given temperature at a given wavelength [W/m2].
+        Spectral radiance of the black body with a given temperature at a given wavelength [W m-2 sr-1 um-1].
 
     Returns
     -------
@@ -81,13 +89,10 @@ def iplanck(radiance, wavelength=10.25):
 
     """
 
-    h = 6.6260755e-34
-    c = 2.9979246e8
-    k = 1.380658e-23
-
     cwl = wavelength * 1e-6
 
-    return h * c / (k * cwl) / numpy.log((2.0 * h * c * c) / (radiance * 1e6 * numpy.power(cwl, 5)) + 1.0)
+    # Same constants as planck, so that iplanck(planck(T)) == T
+    return _C2 / cwl / numpy.log(_C1L / (radiance * 1e6 * numpy.power(cwl, 5)) + 1.0)
 
 
 def longwave_downwelling(air_temperature, relative_humidity, cloudiness_factor=0, emissivity_model='B75'):
@@ -178,19 +183,31 @@ def available_energy(shortwave, albedo, longwave, canopy_temperature, emissivity
 
 def solar_declination(doy):
     """
-    Calculates solar declination from the day of the year
+    Calculates solar declination from the day of the year using the Fourier series of Spencer (1971), as given in
+    Iqbal (1983). Maximum error ~0.035 deg.
+
+    The previous formula, arcsin(0.409 sin(2 pi (doy - 82) / 365)), used the obliquity in radians (0.409) as the
+    amplitude of sin(declination), giving a maximum declination of 24.1 deg instead of 23.44 deg.
+
+    References:
+        Spencer, J.W. 1971. Fourier series representation of the position of the sun. Search 2 (5): 172.
+        Iqbal, M. 1983. An Introduction to Solar Radiation. Academic Press, Eq. 1.3.1.
 
     Parameters
     ----------
     doy : Union[ndarray, float]
-        day of the year
+        day of the year [1-366]
 
     Returns
     -------
     Union[ndarray, float] : solar declination [radians]
 
     """
-    return numpy.arcsin(0.409 * numpy.sin(2.0 * numpy.pi * (doy - 82.0) / 365.0))
+    day_angle = 2.0 * numpy.pi * (doy - 1.0) / 365.0
+    return (0.006918 - 0.399912 * numpy.cos(day_angle) + 0.070257 * numpy.sin(day_angle)
+            - 0.006758 * numpy.cos(2.0 * day_angle) + 0.000907 * numpy.sin(2.0 * day_angle)
+            - 0.002697 * numpy.cos(3.0 * day_angle) + 0.00148 * numpy.sin(3.0 * day_angle))
+
 
 
 def solar_declination_fao(doy):
@@ -213,9 +230,14 @@ def solar_declination_fao(doy):
 
 def solar_elevation(latitude, doy, solar_h):
     """
-    Calculates solar elevation for a given latitude, day of the year and solar time
+    Calculates the (geometric, not refracted) solar elevation for a given latitude, day of the year and solar time:
 
-    Reference...
+        sin(h) = cos(lat) cos(dec) cos(w) + sin(lat) sin(dec)
+
+    with the declination from solar_declination and the hour angle w = 15 deg (solar_h - 12). Compared with the
+    NREL SPA algorithm the error is ~0.2 deg RMS (< 0.6 deg) when solar_h comes from time_utils.get_solar_time.
+
+    Reference: Iqbal, M. 1983. An Introduction to Solar Radiation. Academic Press, Eq. 1.5.1.
 
     Parameters
     ----------
@@ -240,9 +262,16 @@ def solar_elevation(latitude, doy, solar_h):
 
 def solar_azimuth(latitude, doy, solar_h):
     """
-    Calculates solar azimuth for a given latitude, day of the year and solar time
+    Calculates the solar azimuth for a given latitude, day of the year and solar time.
 
-    Reference...
+    Convention (Duffie and Beckman): angle from due south, negative towards the east (morning) and positive towards
+    the west (afternoon), in [-pi, pi]. The equivalent azimuth clockwise from north is solar_azimuth + pi.
+    The previous implementation returned the unsigned angle (arccos), so morning and afternoon positions could not
+    be distinguished.
+
+        tan(azimuth) = sin(w) / (sin(lat) cos(w) - cos(lat) tan(dec))
+
+    Reference: Duffie, J.A., Beckman, W.A. 2013. Solar Engineering of Thermal Processes, 4th ed. Wiley, Eq. 1.6.6.
 
     Parameters
     ----------
@@ -255,16 +284,16 @@ def solar_azimuth(latitude, doy, solar_h):
 
     Returns
     -------
-    Union[ndarray, float] : solar azimuth [radians
+    Union[ndarray, float] : solar azimuth from south, west positive [radians]
 
     """
     lat_r = numpy.radians(latitude)
     dec = solar_declination(doy)
     solar_h_r = numpy.radians((solar_h - 12.0) * 15.0)
-    cos_a = (numpy.sin(lat_r) * numpy.cos(dec) * numpy.cos(solar_h_r) - numpy.cos(lat_r) * numpy.sin(dec)) / (
-        numpy.power(numpy.power(numpy.cos(dec) * numpy.sin(solar_h_r), 2) + numpy.power(
-            numpy.sin(lat_r) * numpy.cos(dec) * numpy.cos(solar_h_r) - numpy.cos(lat_r) * numpy.sin(dec), 2), 0.5))
-    return numpy.arccos(cos_a)
+    west = numpy.cos(dec) * numpy.sin(solar_h_r)
+    south = numpy.sin(lat_r) * numpy.cos(dec) * numpy.cos(solar_h_r) - numpy.cos(lat_r) * numpy.sin(dec)
+    return numpy.arctan2(west, south)
+
 
 
 def toa_irradiance(doy):
@@ -285,26 +314,138 @@ def toa_irradiance(doy):
 
     """
     solar_constant = 1367.0
-    jp = 2.0 * numpy.pi * doy / 365.5
+    jp = 2.0 * numpy.pi * doy / 365.25
     ep = 1.0 + 0.03344 * numpy.cos(jp - 0.048869)
     return solar_constant * ep
 
 
+def _float_if_scalar(values):
+    return float(values) if numpy.ndim(values) == 0 else values
+
+
+def clear_sky_beam(latitude, doy, solar_h, altitude=0, t_lk=1):
+    """
+    Clear-sky beam (direct) irradiance on a horizontal surface from the ESRA clear-sky model (Rigollier et al. 2000)
+    as implemented in GRASS r.sun (Hofierka and Suri 2002):
+
+        B = I0 * sin(h0) * exp(-0.8662 * TL * m * dR(m))
+
+    with the refraction-corrected solar altitude, the Kasten and Young (1989) relative optical air mass m corrected
+    for the site altitude, and the Rayleigh optical thickness dR(m).
+
+    References:
+        Rigollier, C., Bauer, O., Wald, L. 2000. On the clear sky model of the ESRA - European Solar Radiation Atlas -
+        with respect to the Heliosat method. Solar Energy 68 (1): 33-48.
+        Hofierka, Jaroslav, and Marcel Suri. 2002. “The Solar Radiation Model for Open Source GIS: Implementation and
+        Applications.” In Proceedings of the Open Source GIS - GRASS Users Conference.
+
+    Parameters
+    ----------
+    latitude : Union[ndarray, float]
+        Latitude in degrees (+ North / - South)
+    doy : Union[ndarray, float]
+        Day of the year [0-365]
+    solar_h : Union[ndarray, float]
+        Decimal hour of the day [0.0-24.0]
+    altitude : Union[ndarray, float]
+        Ground altitude [m]. Default is sea level (0m)
+    t_lk : Union[ndarray, float]
+        Linke turbidity factor for an air mass of 2 [-]. Default 1 (clean, dry atmosphere)
+
+    Returns
+    -------
+    Union[ndarray, float] : clear-sky beam irradiance on a horizontal surface [W/m2]. 0 when the sun is below the
+    horizon.
+    """
+    s_elev = solar_elevation(latitude, doy, solar_h)
+    ext_rad = toa_irradiance(doy)
+
+    # Atmospheric refraction correction; solar altitude and correction in radians (ESRA / r.sun)
+    dh = 0.061359 * (0.1594 + 1.123 * s_elev + 0.065656 * s_elev * s_elev) / (
+            1.0 + 28.9344 * s_elev + 277.3971 * s_elev * s_elev)
+    href = s_elev + dh
+    sun_up = numpy.asarray(s_elev > 0)
+    # Only evaluated where the sun is up; the clip avoids invalid powers of negative numbers below the horizon
+    href_d = numpy.where(sun_up, numpy.degrees(href), 90.0)
+
+    # Relative optical air mass (Kasten and Young 1989), corrected for the site altitude
+    p_p0 = numpy.exp(-altitude / 8434.5)
+    m = p_p0 / (numpy.sin(numpy.radians(href_d)) + 0.50572 * numpy.power(href_d + 6.07995, -1.6364))
+
+    # Rayleigh optical thickness at air mass m
+    dr = numpy.where(m <= 20.0,
+                     1.0 / (6.6296 + 1.7513 * m - 0.1202 * m ** 2 + 0.0065 * m ** 3 - 0.00013 * m ** 4),
+                     1.0 / (10.4 + 0.718 * m))
+
+    beam = numpy.where(sun_up, ext_rad * numpy.exp(-0.8662 * t_lk * m * dr) * numpy.sin(s_elev), 0.0)
+    return _float_if_scalar(beam)
+
+
+def clear_sky_diffuse(latitude, doy, solar_h, t_lk=1):
+    """
+    Clear-sky diffuse irradiance on a horizontal surface from the ESRA clear-sky model (Rigollier et al. 2000) as
+    implemented in GRASS r.sun (Hofierka and Suri 2002):
+
+        D = I0 * Trd(TL) * Fd(h0, TL)
+
+    with the diffuse transmission function at zenith Trd(TL) and the diffuse angular function
+    Fd = A1 + A2 sin(h0) + A3 sin(h0)^2.
+
+    References: see clear_sky_beam.
+
+    Parameters
+    ----------
+    latitude : Union[ndarray, float]
+        Latitude in degrees (+ North / - South)
+    doy : Union[ndarray, float]
+        Day of the year [0-365]
+    solar_h : Union[ndarray, float]
+        Decimal hour of the day [0.0-24.0]
+    t_lk : Union[ndarray, float]
+        Linke turbidity factor for an air mass of 2 [-]. Default 1 (clean, dry atmosphere)
+
+    Returns
+    -------
+    Union[ndarray, float] : clear-sky diffuse irradiance on a horizontal surface [W/m2]. 0 when the sun is below the
+    horizon.
+    """
+    s_elev = solar_elevation(latitude, doy, solar_h)
+    sin_h = numpy.sin(s_elev)
+    ext_rad = toa_irradiance(doy)
+
+    trd = -1.5843e-2 + 3.0543e-2 * t_lk + 3.797e-4 * t_lk ** 2
+    a1_prime = 2.6463e-1 - 6.1581e-2 * t_lk + 3.1408e-3 * t_lk ** 2
+    a1 = numpy.where(a1_prime * trd < 2.2e-3, 2.2e-3 / trd, a1_prime)
+    a2 = 2.04020 + 1.8945e-2 * t_lk - 1.1161e-2 * t_lk ** 2
+    a3 = -1.3025 + 3.9231e-2 * t_lk + 8.5079e-3 * t_lk ** 2
+    fd = a1 + a2 * sin_h + a3 * sin_h ** 2
+
+    diffuse = numpy.where(numpy.asarray(s_elev > 0), ext_rad * trd * fd, 0.0)
+    return _float_if_scalar(diffuse)
+
+
 def potential_irradiance(latitude, doy, solar_h, altitude=0, t_lk=1):
     """
-    Calculates the potential irradiance from a given latitude, day of the year, solar time and atmospheric aerosol
+    Calculates the clear-sky global (beam + diffuse) irradiance on a horizontal surface for a given latitude, day of
+    the year, solar time, altitude and Linke turbidity, using the ESRA clear-sky model (Rigollier et al. 2000) as
+    implemented in GRASS r.sun (Hofierka and Suri 2002). See clear_sky_beam and clear_sky_diffuse for the
+    components.
 
-    Reference: Hofierka, Jaroslav, Marcel Suri, and Marcel Šúri. 2002. “The Solar Radiation Model for Open Source GIS:
-    Implementation and Applications.” In Proceedings of the Open Source GIS - GRASS Users Conference.
-    http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.19.9831.
+    References:
+        Rigollier, C., Bauer, O., Wald, L. 2000. On the clear sky model of the ESRA - European Solar Radiation Atlas -
+        with respect to the Heliosat method. Solar Energy 68 (1): 33-48.
+        Hofierka, Jaroslav, and Marcel Suri. 2002. “The Solar Radiation Model for Open Source GIS: Implementation and
+        Applications.” In Proceedings of the Open Source GIS - GRASS Users Conference.
+        http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.19.9831.
 
 
     Parameters
     ----------
     altitude : Union[ndarray, float]
-        Ground altitude [m]. Default is sea level (0m)
+        Ground altitude [m]. Default is sea level (0m). Affects the beam component only.
     t_lk : Union[ndarray, float]
-        aerosol parameter for atmospheric clearness
+        Linke turbidity factor for an air mass of 2 [-]. Default 1 (clean, dry atmosphere); typically 2-3 for clear
+        rural skies and 4-6 for turbid or polluted skies.
     latitude : Union[ndarray, float]
         Latitude in degrees (+ North / - South)
     doy : Union[ndarray, float]
@@ -314,43 +455,12 @@ def potential_irradiance(latitude, doy, solar_h, altitude=0, t_lk=1):
 
     Returns
     -------
-    Union[ndarray, float] : potential total irradiance [W/m2]
+    Union[ndarray, float] : clear-sky global irradiance on a horizontal surface [W/m2]. 0 when the sun is below the
+    horizon.
 
     """
-
-    s_elev = solar_elevation(latitude, doy, solar_h)
-    s_elev_d = numpy.degrees(s_elev)
-
-    ext_rad = toa_irradiance(doy)
-    dh = 0.061359 * (0.1594 + 1.123 * s_elev_d + 0.065656 * s_elev_d * s_elev_d) / (
-            1.0 + 28.9344 * s_elev_d + 277.3971 * s_elev_d * s_elev_d)
-    href = s_elev_d + dh
-    p_p0 = numpy.exp(-altitude / 8434.5)
-
-    # Eliminate negative values, no sun at that time
-    if not numpy.isscalar(href):
-        href = numpy.array(href)
-        href[href < 0] = 0
-
-    m = p_p0 / (numpy.sin(numpy.radians(href)) + 0.50572 * numpy.power(href + 6.07995, -1.6364))
-    dr = 1.0 / (
-            6.6296 + 1.7513 * m - numpy.power(0.1202 * m, 2) + numpy.power(0.0065 * m, 3) - numpy.power(0.00013 * m, 4))
-    if numpy.isscalar(dr):
-        if m <= 20:
-            dr = 1.0 / (10.4 + 0.718 * m)
-    else:
-        dr[numpy.array(m <= 20, dtype=bool)] = 1.0 / (10.4 + 0.718 * m[numpy.array(m <= 20, dtype=bool)])
-
-    pot_irr = ext_rad * numpy.exp(-0.8662 * t_lk * m * dr) * numpy.sin(s_elev)
-
-    if numpy.isscalar(pot_irr):
-        if href < 0:
-            return 0.0
-    else:
-        pot_irr = numpy.array(pot_irr)
-        pot_irr[numpy.array(href <= 0, dtype=bool)] = 0.0
-
-    return pot_irr
+    return _float_if_scalar(clear_sky_beam(latitude, doy, solar_h, altitude, t_lk) +
+                            clear_sky_diffuse(latitude, doy, solar_h, t_lk))
 
 
 def daily_potential_toa(latitude, day_of_year):
@@ -364,7 +474,7 @@ def daily_potential_toa(latitude, day_of_year):
     greater than 55 degrees (N or S), the equations have limited validity.
     Reference should be made to the Smithsonian Tables to assess possible
     deviations."
-    :param latitude: Latitude [radians]
+    :param latitude: Latitude [degrees] (+ North / - South)
     :param day_of_year: Day of the year
 
     :return: Daily extraterrestrial radiation [MJ m-2 day-1]
@@ -415,7 +525,7 @@ def sunset_hour_angle(latitude, sol_dec):
     Calculate sunset hour angle (*Ws*) from latitude and solar
     declination.
     Based on FAO equation 25 in Allen et al (1998).
-    :param latitude: Latitude [radians]. Note: *latitude* should be negative
+    :param latitude: Latitude [degrees]. Note: *latitude* should be negative
         if it in the southern hemisphere, positive if in the northern
         hemisphere.
     :param sol_dec: Solar declination [radians]. Can be calculated using
@@ -481,15 +591,17 @@ def net_out_lw_hourly(t_mean, relative_humidity, daily_clearness):
     other absorbers are assumed to be constant.
     The output can be converted to equivalent evaporation [mm day-1] using
     ``energy2evap()``.
-    Based on FAO equation 39 in Allen et al (1998).
+    Based on FAO equation 39 in Allen et al (1998), with the hourly Stefan-Boltzmann constant
+    (2.043e-10 MJ K-4 m-2 hour-1) as in FAO-56 Example 19.
     :param t_mean: Hourly mean temperature [degrees Celsius]
     :param relative_humidity: Hourly mean relative humidity [%]
     :param daily_clearness: clearness index calculated as Rs/Rs_clear_sky.
-    :return: Net outgoing longwave radiation [MJ m-2 day-1]
+    :return: Net outgoing longwave radiation [MJ m-2 hour-1]
     :rtype: float
     """
 
-    avp = ea_calc(t_mean, relative_humidity)
+    # Actual vapour pressure in kPa (ea_calc returns Pa)
+    avp = ea_calc(t_mean, relative_humidity) / 1000.0
     tmp1 = (BOLTZMANN_HOURLY * numpy.power((t_mean+273.15), 4))
     tmp2 = (0.34 - (0.14 * numpy.sqrt(avp)))
     tmp3 = 1.35 * daily_clearness - 0.35
@@ -538,14 +650,25 @@ def net_rad(ni_sw_rad, no_lw_rad):
     return ni_sw_rad - no_lw_rad
 
 
-# Below, different formulations for calculating longwave radiation
-# They need to be documented accordingly
+# Below, alternative formulations for the downwelling longwave radiation
 
 def longwave_downwelling_1(air_temperature, relative_humidity):
     """
-    Function to calculate the longwave downwelling radiation from the air temperature and relative humidity
-    Reference:
+    Function to calculate the longwave downwelling radiation from the air temperature and relative humidity, with
+    the Brunt-type clear-sky emissivity implied by FAO-56:
 
+        emissivity = 0.64 + 0.044 * sqrt(ea),  ea in hPa
+
+    FAO-56 Eq. 39 writes the net emissivity between the surface and the atmosphere as (0.34 - 0.14 sqrt(ea)),
+    ea in kPa. With a surface emissivity of 0.98 (the default of available_energy), the atmospheric emissivity is
+    0.98 - 0.34 + 0.14 sqrt(ea[kPa]) = 0.64 + 0.0443 sqrt(ea[hPa]). (Identified from the coefficients; the original
+    implementation gave no reference.)
+
+    References:
+        Allen, R.G., Pereira, L.S., Raes, D., Smith, M. 1998. Crop evapotranspiration. FAO Irrigation and Drainage
+        Paper 56, Eq. 39.
+        Brunt, D. 1932. Notes on radiation in the atmosphere. Quarterly Journal of the Royal Meteorological Society
+        58: 389-420 (functional form; original coefficients 0.52 and 0.065).
 
     Parameters
     ----------
@@ -569,9 +692,11 @@ def longwave_downwelling_1(air_temperature, relative_humidity):
 
 def longwave_downwelling_2(air_temperature, relative_humidity):
     """
-    Function to calculate the longwave downwelling radiation from the air temperature and relative humidity
+    Function to calculate the longwave downwelling radiation from the air temperature and relative humidity, with
+    the clear-sky atmospheric emissivity of Idso (1981): 0.70 + 5.95e-5 ea exp(1500 / T), ea in hPa, T in K.
 
-    Reference...
+    Reference: Idso, S.B. 1981. A set of equations for full spectrum and 8- to 14-um and 10.5- to 12.5-um thermal
+    radiation from cloudless skies. Water Resources Research 17 (2): 295-304.
 
     Parameters
     ----------
@@ -595,9 +720,17 @@ def longwave_downwelling_2(air_temperature, relative_humidity):
 
 def longwave_downwelling_3(air_temperature, relative_humidity):
     """
-    Function to calculate the longwave downwelling radiation from the air temperature and relative humidity
+    Function to calculate the longwave downwelling radiation from the air temperature and relative humidity, for a
+    sky with a fixed cloudiness of 0.3:
 
-    Reference...
+        emissivity = 0.3 + 0.7 * 1.24 * (ea / T) ** (1/7),  ea in hPa, T in K
+
+    This is the Brutsaert (1975) clear-sky emissivity with the Crawford and Duchon (1999) cloud correction,
+    emissivity = clf + (1 - clf) * emissivity_clear, for clf = 0.3. It is identical to
+    longwave_downwelling(air_temperature, relative_humidity, cloudiness_factor=0.3, emissivity_model='B75').
+    (Identified from the formula; the original implementation gave no reference.)
+
+    References: see longwave_downwelling.
 
     Parameters
     ----------

@@ -1,0 +1,52 @@
+[project]
+name = "opencroplib"
+dynamic = ["version"]
+description = "Python Library for simulating physiological processes in plants"
+readme = "README.md"
+license = { file = "LICENSE.txt" }
+authors = [{ name = "Jose A. Jimenez-Berni", email = "berni@ias.csic.es" }]
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "pandas>=1.1",
+    "pytz",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+
+[project.urls]
+Homepage = "https://github.com/OpenAgriTech/opencroplib"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    # Reference implementations used to cross-validate the ETo functions (tests/test_eto_reference_libraries.py)
+    "refet>=0.5",
+    "pyet>=1.3",
+    # NREL SPA solar position and the Ineichen-Perez clear-sky model (tests/test_radiation.py)
+    "pvlib>=0.11",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "opencroplib/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["opencroplib"]
+
+[tool.hatch.build.targets.sdist]
+include = ["opencroplib", "tests", "README.md", "LICENSE.txt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+xfail_strict = true

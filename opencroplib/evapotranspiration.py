@@ -25,7 +25,7 @@
 
 import numpy as np
 from .atmophere import delta_calc, psychrometric_gamma, vpd_calc
-from .aerodynamic import adjust_wind_height
+from .aerodynamic import wind_speed_2m
 
 __author__ = "Jose A. Jimenez-Berni  <berni@ias.csic.es>"
 __version__ = "0.0.1"
@@ -46,31 +46,29 @@ def et0_FAO56(air_temperature, relative_humidity, air_pressure, wind_speed, sola
     :param solar_radiation: Solar radiation [W m-2]
     :param net_radiation: Net radiation [W m-2]
     :param wind_speed: Wind speed [m s-1]
-    :param z_wind: Height of the wind speed measurements [m]. Default 2m
-    :param soil_heat_flux: If G is measured, it can be provided here. If None, it will be calculated as
-    G=0.1Rn during the day and G=0.5Rn at night time
+    :param z_wind: Height of the wind speed measurements over grass [m]. Default 2m. Other heights are converted to
+    2 m with FAO-56 Eq. 47
+    :param soil_heat_flux: Soil heat flux G [W m-2]. If None, G = 0.1 Rn during the day (solar_radiation > 0)
+    and G = 0.5 Rn at night (FAO-56 Eqs. 45-46)
     :return: ETo [mm h-1]
     :rtype: float
     """
 
-    # Correct wind speed if measurement is not 2m
-    if z_wind != 2.0:
-        wind_speed = adjust_wind_height(wind_speed, 2.0, z_wind)
+    # Convert the wind speed measured at z_wind over grass to 2 m (FAO-56 Eq. 47)
+    if np.any(np.asarray(z_wind) != 2.0):
+        wind_speed = wind_speed_2m(wind_speed, z_wind)
 
     delta = delta_calc(air_temperature)
     gamma = psychrometric_gamma(air_temperature, relative_humidity, air_pressure)
     vpd = vpd_calc(air_temperature, relative_humidity)
     net_radiation_flux_density = net_radiation*0.0036
     if soil_heat_flux is None:
-        if np.isscalar(solar_radiation):
-            soil_heat_flux = 0.0
-        else:
-            soil_heat_flux = np.where(solar_radiation > 0, net_radiation_flux_density*0.1,
-                                      net_radiation_flux_density*0.5)
+        # FAO-56 Eqs. 45-46, in W m-2 like a measured G: 0.1 Rn during the day, 0.5 Rn at night
+        soil_heat_flux = np.where(np.asarray(solar_radiation) > 0, 0.1 * net_radiation, 0.5 * net_radiation)
 
     soil_heat_flux_density = soil_heat_flux*0.0036
 
-    et0 = (0.408*delta*(net_radiation_flux_density-soil_heat_flux_density)+gamma*9.4/(air_temperature+273.0) *
+    et0 = (0.408*delta*(net_radiation_flux_density-soil_heat_flux_density)+gamma*37.0/(air_temperature+273.0) *
            wind_speed*vpd/1000.0)/(delta+gamma*(1+0.34*wind_speed))
 
     return et0
@@ -90,16 +88,16 @@ def et0_FAO56_daily(air_temperature, relative_humidity, air_pressure, wind_speed
     :param solar_radiation: Solar radiation [MJ day-2]
     :param net_radiation: Net radiation [MJ day-2]
     :param wind_speed: Wind speed [m s-1]
-    :param z_wind: Height of the wind speed measurements [m]. Default 2m
-    :param soil_heat_flux: If G is measured, it can be provided here. If None, it will be calculated as
-    G=0.1Rn during the day and G=0.5Rn at night time
+    :param z_wind: Height of the wind speed measurements over grass [m]. Default 2m. Other heights are converted to
+    2 m with FAO-56 Eq. 47
+    :param soil_heat_flux: Soil heat flux G [MJ m-2 day-1]. If None, G = 0 (FAO-56 Eq. 42)
     :return: ETo [mm h-1]
     :rtype: float
     """
 
-    # Correct wind speed if measurement is not 2m
-    if z_wind != 2.0:
-        wind_speed = adjust_wind_height(wind_speed, 2.0, z_wind)
+    # Convert the wind speed measured at z_wind over grass to 2 m (FAO-56 Eq. 47)
+    if np.any(np.asarray(z_wind) != 2.0):
+        wind_speed = wind_speed_2m(wind_speed, z_wind)
 
     delta = delta_calc(air_temperature)
     gamma = psychrometric_gamma(air_temperature, relative_humidity, air_pressure)
@@ -131,27 +129,25 @@ def et0_ASCE(air_temperature, relative_humidity, air_pressure, wind_speed, solar
     :param solar_radiation: Solar radiation [W m-2]
     :param net_radiation: Net radiation [W m-2]
     :param wind_speed: Wind speed [m s-1]
-    :param z_wind: Height of the wind speed measurements [m]. Default 2m
-    :param soil_heat_flux: If G is measured, it can be provided here. If None, it will be calculated as
-    G=0.1Rn during the day and G=0.5Rn at night time
+    :param z_wind: Height of the wind speed measurements over grass [m]. Default 2m. Other heights are converted to
+    2 m with FAO-56 Eq. 47
+    :param soil_heat_flux: Soil heat flux G [W m-2]. If None, G = 0.1 Rn during the day (solar_radiation > 0)
+    and G = 0.5 Rn at night (FAO-56 Eqs. 45-46)
     :return: ETo [mm h-1]
     :rtype: float
     """
 
-    # Correct wind speed if measurement is not 2m
-    if z_wind != 2.0:
-        wind_speed = adjust_wind_height(wind_speed, 2.0, z_wind)
+    # Convert the wind speed measured at z_wind over grass to 2 m (FAO-56 Eq. 47)
+    if np.any(np.asarray(z_wind) != 2.0):
+        wind_speed = wind_speed_2m(wind_speed, z_wind)
 
     delta = delta_calc(air_temperature)
     gamma = psychrometric_gamma(air_temperature, relative_humidity, air_pressure)
     vpd = vpd_calc(air_temperature, relative_humidity)
     net_radiation_flux_density = net_radiation*0.0036
     if soil_heat_flux is None:
-        if np.isscalar(solar_radiation):
-            soil_heat_flux = 0.0
-        else:
-            soil_heat_flux = np.where(solar_radiation > 0, net_radiation_flux_density*0.1,
-                                      net_radiation_flux_density*0.5)
+        # FAO-56 Eqs. 45-46, in W m-2 like a measured G: 0.1 Rn during the day, 0.5 Rn at night
+        soil_heat_flux = np.where(np.asarray(solar_radiation) > 0, 0.1 * net_radiation, 0.5 * net_radiation)
 
     soil_heat_flux_density = soil_heat_flux*0.0036
 
@@ -160,7 +156,7 @@ def et0_ASCE(air_temperature, relative_humidity, air_pressure, wind_speed, solar
     else:
         cd = np.where(net_radiation_flux_density >= 0, 0.24, 0.96)
 
-    et0 = (0.408*delta*(net_radiation_flux_density-soil_heat_flux_density)+gamma*9.4/(air_temperature+273.0) *
+    et0 = (0.408*delta*(net_radiation_flux_density-soil_heat_flux_density)+gamma*37.0/(air_temperature+273.0) *
            wind_speed*vpd/1000.0)/(delta+gamma*(1+cd*wind_speed))
 
     return et0
