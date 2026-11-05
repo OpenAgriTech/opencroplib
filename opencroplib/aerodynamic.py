@@ -28,7 +28,8 @@ __author__ = "Jose A. Jimenez-Berni  <berni@ias.csic.es>"
 __version__ = "0.1"
 __date__ = "July 2017"
 
-# von Karman constant, used by every function in this module (FAO-56 value)
+# Default von Karman constant (FAO-56 value). aerodynamic_resistance_viney and aerodynamic_resistance_fao accept
+# a different value through their von_karman argument (opencroplib < 0.2.0 used 0.40 in the Viney function).
 VON_KARMAN = 0.41
 
 # Default FAO-56 reference grass and blending height used to transfer a wind speed measured over grass to the crop
@@ -152,7 +153,8 @@ def _wind_at_reference_height(wind_speed, canopy_height, measurement_height, d_r
 def aerodynamic_resistance_viney(wind_speed, air_temperature, canopy_temperature, canopy_height, measurement_height,
                                  d_ratio=2 / 3.0, z0m_ratio=0.13, z0h_ratio=0.13, wind_over_grass=True,
                                  grass_height=FAO_GRASS_HEIGHT, grass_measurement_height=FAO_GRASS_MEASUREMENT_HEIGHT,
-                                 blending_height=BLENDING_HEIGHT, min_wind_speed=MIN_WIND_SPEED):
+                                 blending_height=BLENDING_HEIGHT, min_wind_speed=MIN_WIND_SPEED,
+                                 von_karman=VON_KARMAN):
     """
     Calculates aerodynamic resistance based on Viney 1991
 
@@ -196,6 +198,13 @@ def aerodynamic_resistance_viney(wind_speed, air_temperature, canopy_temperature
         Blending height [m]. Only used if wind_over_grass is True. Default 100.0
     min_wind_speed : float
         Wind speeds below this value are set to this value (on a copy) to avoid divisions by zero [m/s]
+    von_karman : float
+        von Karman constant k. Default VON_KARMAN (0.41, as in FAO-56). Values between 0.40 and 0.41 are used in the
+        literature; opencroplib < 0.2.0 used 0.40 in this function. The neutral resistance scales with 1 / k^2 and
+        the Viney stability correction does not depend on k, so ra(k = 0.40) = 1.0506 * ra(k = 0.41) in all
+        conditions. Use the value of the study you want to reproduce: through the sensible heat flux, a 5 % change
+        in ra changes canopy conductance estimated with plant.canopy_conductance by ~1-3 % at gc > 6 mm/s, but by
+        10-30 % at gc of 1-3 mm/s.
 
     Raises
     ------
@@ -217,7 +226,7 @@ def aerodynamic_resistance_viney(wind_speed, air_temperature, canopy_temperature
     b = 1.9117 - 0.2237 * numpy.log(1.86 + numpy.power(2.12 - logarithmic_profile_ym, 2))
     c = 0.8437 - 0.1243 * numpy.log(3.49 + numpy.power(2.79 - logarithmic_profile_ym, 2))
     ra_prime = numpy.log((measurement_height - d) / zoh) * logarithmic_profile_ym / (
-            VON_KARMAN * VON_KARMAN * wind_speed_canopy)
+            von_karman * von_karman * wind_speed_canopy)
     richardson_number = (measurement_height - d) * 9.81 * (air_temperature - canopy_temperature) / (
             wind_speed_canopy * wind_speed_canopy * (air_temperature + 273.15))
 
@@ -234,7 +243,8 @@ def aerodynamic_resistance_viney(wind_speed, air_temperature, canopy_temperature
 def aerodynamic_resistance_fao(wind_speed, canopy_height, measurement_height,
                                d_ratio=2 / 3.0, z0m_ratio=0.123, z0h_ratio=0.0123, wind_over_grass=True,
                                grass_height=FAO_GRASS_HEIGHT, grass_measurement_height=FAO_GRASS_MEASUREMENT_HEIGHT,
-                               blending_height=BLENDING_HEIGHT, min_wind_speed=MIN_WIND_SPEED):
+                               blending_height=BLENDING_HEIGHT, min_wind_speed=MIN_WIND_SPEED,
+                               von_karman=VON_KARMAN):
     """
     Function to aerodynamic resistance based on FAO's Penman-Monteith (neutral conditions)
     Reference: http://www.fao.org/docrep/X0490E/x0490e06.htm#aerodynamic resistance (ra)
@@ -267,6 +277,8 @@ def aerodynamic_resistance_fao(wind_speed, canopy_height, measurement_height,
         Blending height [m]. Only used if wind_over_grass is True. Default 100.0
     min_wind_speed : float
         Wind speeds below this value are set to this value (on a copy) to avoid divisions by zero [m/s]
+    von_karman : float
+        von Karman constant k. Default VON_KARMAN (0.41, as in FAO-56). ra scales with 1 / k^2.
 
     Returns
     -------
@@ -283,7 +295,7 @@ def aerodynamic_resistance_fao(wind_speed, canopy_height, measurement_height,
                                                           z0m_ratio, wind_over_grass, grass_height,
                                                           grass_measurement_height, blending_height, min_wind_speed)
     ra_s = numpy.log((measurement_height - d) / zoh) * numpy.log((measurement_height - d) / zom) / (
-            VON_KARMAN * VON_KARMAN * wind_speed_canopy)
+            von_karman * von_karman * wind_speed_canopy)
     return ra_s
 
 

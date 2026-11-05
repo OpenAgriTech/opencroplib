@@ -109,6 +109,25 @@ class TestAerodynamicFunctions(TestCase):
         # Scalar in, scalar out
         self.assertTrue(numpy.ndim(aerodynamic_resistance_viney(2.0, 30.0, 35.0, 0.5, 2.0)) == 0)
 
+    def test_von_karman_configurable(self):
+        wind = numpy.array([0.5, 1.0, 2.0, 4.0, 8.0])
+        tc = numpy.array([35.0, 25.0, 35.0, 30.0, 35.0])  # unstable, stable, unstable, neutral, unstable
+        # ra scales exactly with 1 / k^2 (the Viney stability correction does not depend on k)
+        numpy.testing.assert_allclose(
+            aerodynamic_resistance_viney(wind, 30.0, tc, 4.0, 6.0, von_karman=0.40) /
+            aerodynamic_resistance_viney(wind, 30.0, tc, 4.0, 6.0), (0.41 / 0.40) ** 2, rtol=1e-12)
+        numpy.testing.assert_allclose(
+            aerodynamic_resistance_fao(wind, 4.0, 6.0, von_karman=0.40) / aerodynamic_resistance_fao(wind, 4.0, 6.0),
+            (0.41 / 0.40) ** 2, rtol=1e-12)
+        # Default is the module constant
+        numpy.testing.assert_allclose(aerodynamic_resistance_viney(wind, 30.0, tc, 4.0, 6.0),
+                                      aerodynamic_resistance_viney(wind, 30.0, tc, 4.0, 6.0, von_karman=VON_KARMAN))
+        # k = 0.40 reproduces opencroplib < 0.2.0 (f6dc404) within 0.5 %; the rest is the derived grass factor
+        # (1.812 instead of the hard-coded 1.82)
+        old = numpy.array([10.8063, 10.9599, 9.3119, 6.4649, 3.8275])  # Ta 30 C, Tc 35 C, h 4 m, z 6 m
+        numpy.testing.assert_allclose(aerodynamic_resistance_viney(wind, 30.0, 35.0, 4.0, 6.0, von_karman=0.40), old,
+                                      rtol=5e-3)
+
     def test_viney_neutral_and_missing(self):
         wind = numpy.array([1.0, 2.0, 4.0])
         neutral = aerodynamic_resistance_fao(wind, self.canopy_height, self.measurement_height,
