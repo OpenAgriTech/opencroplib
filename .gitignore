@@ -38,3 +38,7 @@ nosetests.xml
 .idea
 
 .ipynb_checkpoints
+
+# uv / virtualenv
+.venv/
+.pytest_cache/

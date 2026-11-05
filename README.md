@@ -26,7 +26,25 @@ The library is structured into different modules:
 
 # Installation
 
-```pip install opencropib ```
+```
+pip install opencroplib
+```
+
+# Development
+
+The project is managed with [uv](https://docs.astral.sh/uv/):
+
+```
+uv sync          # create .venv with the library and the dev dependencies
+uv run pytest    # run the test suite
+uv build         # build the sdist and wheel
+```
+
+The tests in `tests/test_eto_reference_libraries.py` cross-validate the ETo functions against
+[refet](https://github.com/WSWUP/RefET) (ASCE-EWRI 2005) and [pyet](https://github.com/pyet-org/pyet).
+`tests/test_radiation.py` checks the solar geometry against the NREL SPA and the clear-sky model against
+[pvlib](https://github.com/pvlib/pvlib-python) and GRASS GIS r.sun. These reference libraries are installed as dev
+dependencies.
 
 # Examples
 
