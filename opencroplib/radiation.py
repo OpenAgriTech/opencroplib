@@ -645,14 +645,25 @@ def net_rad(ni_sw_rad, no_lw_rad):
     return ni_sw_rad - no_lw_rad
 
 
-# Below, different formulations for calculating longwave radiation
-# They need to be documented accordingly
+# Below, alternative formulations for the downwelling longwave radiation
 
 def longwave_downwelling_1(air_temperature, relative_humidity):
     """
-    Function to calculate the longwave downwelling radiation from the air temperature and relative humidity
-    Reference:
+    Function to calculate the longwave downwelling radiation from the air temperature and relative humidity, with
+    the Brunt-type clear-sky emissivity implied by FAO-56:
 
+        emissivity = 0.64 + 0.044 * sqrt(ea),  ea in hPa
+
+    FAO-56 Eq. 39 writes the net emissivity between the surface and the atmosphere as (0.34 - 0.14 sqrt(ea)),
+    ea in kPa. With a surface emissivity of 0.98 (the default of available_energy), the atmospheric emissivity is
+    0.98 - 0.34 + 0.14 sqrt(ea[kPa]) = 0.64 + 0.0443 sqrt(ea[hPa]). (Identified from the coefficients; the original
+    implementation gave no reference.)
+
+    References:
+        Allen, R.G., Pereira, L.S., Raes, D., Smith, M. 1998. Crop evapotranspiration. FAO Irrigation and Drainage
+        Paper 56, Eq. 39.
+        Brunt, D. 1932. Notes on radiation in the atmosphere. Quarterly Journal of the Royal Meteorological Society
+        58: 389-420 (functional form; original coefficients 0.52 and 0.065).
 
     Parameters
     ----------
@@ -704,9 +715,17 @@ def longwave_downwelling_2(air_temperature, relative_humidity):
 
 def longwave_downwelling_3(air_temperature, relative_humidity):
     """
-    Function to calculate the longwave downwelling radiation from the air temperature and relative humidity
+    Function to calculate the longwave downwelling radiation from the air temperature and relative humidity, for a
+    sky with a fixed cloudiness of 0.3:
 
-    Reference...
+        emissivity = 0.3 + 0.7 * 1.24 * (ea / T) ** (1/7),  ea in hPa, T in K
+
+    This is the Brutsaert (1975) clear-sky emissivity with the Crawford and Duchon (1999) cloud correction,
+    emissivity = clf + (1 - clf) * emissivity_clear, for clf = 0.3. It is identical to
+    longwave_downwelling(air_temperature, relative_humidity, cloudiness_factor=0.3, emissivity_model='B75').
+    (Identified from the formula; the original implementation gave no reference.)
+
+    References: see longwave_downwelling.
 
     Parameters
     ----------

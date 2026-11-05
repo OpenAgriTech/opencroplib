@@ -31,6 +31,7 @@ import pandas
 import pytz
 
 from opencroplib.radiation import SUPPORTED_ATMOSPHERIC_EMISSIVITY_MODELS
+from opencroplib.radiation import longwave_downwelling_1, longwave_downwelling_2, longwave_downwelling_3
 from opencroplib.radiation import planck, iplanck, potential_irradiance, longwave_downwelling, solar_elevation, \
     toa_irradiance, clear_sky_beam, clear_sky_diffuse, solar_declination, solar_azimuth, daily_potential_toa, \
     sunset_hour_angle, solar_declination_fao, net_out_lw_daily, net_out_lw_hourly
@@ -262,3 +263,24 @@ def test_fao56_net_longwave():
     # FAO-56 Example 19 (hourly, 14-15 h): T 38 C, RH 52 % (ea 3.445 kPa), Rs 2.450, Rso 2.658 MJ m-2 h-1.
     # Rnl = Rns - Rn = 0.77 * 2.450 - 1.749 = 0.138 MJ m-2 h-1. It used ea in Pa and a sigma 4x too small.
     assert net_out_lw_hourly(38.0, 52.0, 2.450 / 2.658) == pytest.approx(0.77 * 2.450 - 1.749, abs=0.003)
+
+
+def test_alternative_longwave_formulations():
+    t, rh = numpy.meshgrid(numpy.arange(-10.0, 45.0, 5.0), numpy.arange(10.0, 100.0, 10.0))
+    t, rh = t.ravel(), rh.ravel()
+    sigma_t4 = 5.670373e-8 * (t + 273.15) ** 4
+    from opencroplib.atmophere import ea_calc
+    ea_hpa = ea_calc(t, rh) / 100.0
+    # _1: emissivity implied by FAO-56 Eq. 39 (0.34 - 0.14 sqrt(ea[kPa])) with a surface emissivity of 0.98,
+    # i.e. 0.64 + 0.0443 sqrt(ea[hPa]), with the slope rounded to 0.044
+    assert 0.98 - 0.34 == pytest.approx(0.64, abs=1e-12)
+    assert round(0.14 / math.sqrt(10.0), 3) == 0.044
+    numpy.testing.assert_allclose(longwave_downwelling_1(t, rh) / sigma_t4, 0.64 + 0.044 * numpy.sqrt(ea_hpa),
+                                  rtol=1e-12)
+    # _2: Idso (1981)
+    numpy.testing.assert_allclose(longwave_downwelling_2(t, rh) / sigma_t4,
+                                  0.70 + 5.95e-5 * ea_hpa * numpy.exp(1500.0 / (t + 273.15)), rtol=1e-12)
+    # _3: Brutsaert (1975) with the Crawford and Duchon (1999) cloud correction for a cloudiness of 0.3
+    numpy.testing.assert_allclose(longwave_downwelling_3(t, rh),
+                                  longwave_downwelling(t, rh, cloudiness_factor=0.3, emissivity_model='B75'),
+                                  rtol=1e-12)
