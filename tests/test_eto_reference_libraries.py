@@ -4,7 +4,7 @@ Cross-validation of the ETo functions against established reference implementati
 
 - refet (https://github.com/WSWUP/RefET): ASCE-EWRI (2005) standardized reference ET, maintained by the
   Western States Water Use Program / Desert Research Institute.
-- pyet (https://github.com/pyet-org/pyet): Vremec & Collenteur, Geosci. Model Dev. 2024.
+- pyet (https://github.com/pyet-org/pyet): Vremec, Collenteur & Birk (2024), Geosci. Model Dev. 17, 7083-7103.
 
 Two levels are checked:
 1. The equation itself: refet's ASCE Eq. 1 fed with opencroplib's own delta, gamma and VPD must give the same ETo
