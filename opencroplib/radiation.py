@@ -33,13 +33,22 @@ BOLTZMANN = 5.670373e-8  # [W m-2 K-4]
 BOLTZMANN_HOURLY = 2.043e-10  # [MJ K-4 m-2 hour-1] (FAO-56: 4.903e-9 / 24)
 STEFAN_BOLTZMANN_CONSTANT = 0.000000004903  # [MJ K-4 m-2 day-1]
 SUPPORTED_ATMOSPHERIC_EMISSIVITY_MODELS = ['B75', 'Swinbank', 'BM']
+# Exact SI (2019) defining constants used by the Planck functions
+PLANCK_H = 6.62607015e-34  # [J s]
+SPEED_OF_LIGHT = 299792458.0  # [m s-1]
+BOLTZMANN_K = 1.380649e-23  # [J K-1]
+# First and second radiation constants: c1L = 2 h c^2 [W m2 sr-1], c2 = h c / k [m K]
+_C1L = 2.0 * PLANCK_H * SPEED_OF_LIGHT ** 2
+_C2 = PLANCK_H * SPEED_OF_LIGHT / BOLTZMANN_K
 #: Solar constant [ MJ m-2 min-1]
 SOLAR_CONSTANT = 0.0820
 
 
 def planck(temperature_kelvin, wavelength=10.25):
     """
-    Calculate Planck's black body thermal radiance for a given temperature and central wavelength
+    Calculate Planck's black body thermal radiance for a given temperature and central wavelength, with the exact
+    SI (2019) values of h, c and k (opencroplib < 0.2.0 used older CODATA values that differed between planck and
+    iplanck, so that the round trip was off by ~1.4 mK).
     Reference: https://ncc.nesdis.noaa.gov/data/planck.html
 
     Parameters
@@ -56,11 +65,10 @@ def planck(temperature_kelvin, wavelength=10.25):
 
     """
 
-    c1 = 1.1910427e-22
-    c2 = 1.4387752e-2
     cwl = wavelength * 1e-6
 
-    return c1 / numpy.power(cwl, 5) / (numpy.exp(c2 / temperature_kelvin / cwl) - 1.0)
+    # 1e-6: per metre of wavelength -> per micrometre
+    return _C1L * 1e-6 / numpy.power(cwl, 5) / (numpy.exp(_C2 / temperature_kelvin / cwl) - 1.0)
 
 
 def iplanck(radiance, wavelength=10.25):
@@ -81,13 +89,10 @@ def iplanck(radiance, wavelength=10.25):
 
     """
 
-    h = 6.6260755e-34
-    c = 2.9979246e8
-    k = 1.380658e-23
-
     cwl = wavelength * 1e-6
 
-    return h * c / (k * cwl) / numpy.log((2.0 * h * c * c) / (radiance * 1e6 * numpy.power(cwl, 5)) + 1.0)
+    # Same constants as planck, so that iplanck(planck(T)) == T
+    return _C2 / cwl / numpy.log(_C1L / (radiance * 1e6 * numpy.power(cwl, 5)) + 1.0)
 
 
 def longwave_downwelling(air_temperature, relative_humidity, cloudiness_factor=0, emissivity_model='B75'):

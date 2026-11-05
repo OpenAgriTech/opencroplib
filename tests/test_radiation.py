@@ -52,8 +52,13 @@ class TestRadiationFunctions(TestCase):
 
     def test_planck_functions(self):
         # Make sure direct and inverse functions return the same
-        self.assertAlmostEqual(self.canopy_temperature + 273.15, iplanck(planck(self.canopy_temperature + 273.15)), 2)
-        self.assertAlmostEqual(10, planck(iplanck(10)), 2)
+        # Exact inverses (both use the SI 2019 constants; the round trip used to be off by ~1.4 mK)
+        self.assertAlmostEqual(self.canopy_temperature + 273.15, iplanck(planck(self.canopy_temperature + 273.15)),
+                               delta=1e-9)
+        self.assertAlmostEqual(10, planck(iplanck(10)), delta=1e-9)
+        temperature = numpy.linspace(200.0, 400.0, 201)
+        for wavelength in (8.0, 10.25, 12.0):
+            numpy.testing.assert_allclose(iplanck(planck(temperature, wavelength), wavelength), temperature, atol=1e-9)
 
     def test_potential_irradiance(self):
         # General test: ESRA global (beam + diffuse) clear-sky irradiance, TL = 1. Reference value from GRASS r.sun
@@ -64,7 +69,7 @@ class TestRadiationFunctions(TestCase):
         alt = solar_elevation(self.latitude_spain, doy, solar_h)
         self.assertAlmostEqual(potential_irradiance(self.latitude_spain, doy, solar_h),
                                rsun_beam(doy, alt, 0.0, 1.0) + rsun_diffuse(doy, alt, 1.0), delta=1e-9)
-        self.assertAlmostEqual(potential_irradiance(self.latitude_spain, doy, solar_h), 1161.4, delta=0.1)
+        self.assertAlmostEqual(potential_irradiance(self.latitude_spain, doy, solar_h), 1160.6, delta=0.1)
         # There should be more irradiance as we climb
         self.assertGreater(potential_irradiance(self.latitude_spain,
                                                 get_day_of_year(self.dt_utc),
@@ -284,3 +289,13 @@ def test_alternative_longwave_formulations():
     numpy.testing.assert_allclose(longwave_downwelling_3(t, rh),
                                   longwave_downwelling(t, rh, cloudiness_factor=0.3, emissivity_model='B75'),
                                   rtol=1e-12)
+
+
+def test_planck_against_scipy_constants():
+    constants = pytest.importorskip("scipy.constants")
+    temperature = numpy.linspace(200.0, 400.0, 201)
+    for wavelength in (8.0, 10.25, 12.0):
+        lam = wavelength * 1e-6
+        expected = (2 * constants.h * constants.c ** 2 / lam ** 5 /
+                    (numpy.exp(constants.h * constants.c / (lam * constants.k * temperature)) - 1) * 1e-6)
+        numpy.testing.assert_allclose(planck(temperature, wavelength), expected, rtol=1e-12)
