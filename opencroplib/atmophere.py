@@ -40,11 +40,18 @@ The original code has been adapted to be compatible with numpy and pandas.
 """
 
 
+def _as_array(x):
+    """Convert lists and tuples to float ndarrays; leave scalars, ndarrays and pandas objects unchanged."""
+    if isinstance(x, (list, tuple)):
+        return np.asarray(x, dtype=float)
+    return x
+
+
 def es_calc(air_temperature):
     """
     Function to calculate saturated vapour pressure from temperature.
     For T<0 C:  Saturation vapour pressure equation for ice: Goff, J.A.,and S.
-    Gratch, Low-pressure properties of water from \-160 to 212 F.
+    Gratch, Low-pressure properties of water from -160 to 212 F.
     Transactions of the American society of
     heating and ventilating engineers, pp 95-122, presented
     at the 52nd annual meeting of the American society of
@@ -74,6 +81,7 @@ def es_calc(air_temperature):
     -------
     Union[ndarray, float] : saturated vapour pressure [Pa]
     """
+    air_temperature = _as_array(air_temperature)
 
     # Determine length of array
     # Check if we have a scalar value or an array
@@ -94,7 +102,8 @@ def es_calc(air_temperature):
                      0.42873E-3 * (np.power(10, (+4.76955 * (1.0 - 273.16 / (air_temperature + 273.15)))) - 1) + \
                      0.78614
             es = np.power(10, log_pw)
-    else:  # Dealing with an array
+    else:  # Dealing with an array (or list, tuple, pandas Series...)
+        air_temperature = np.asarray(air_temperature, dtype=float)
 
         # Calculate saturated vapour pressures, distinguish between water/ice
         es = np.zeros(air_temperature.shape)
@@ -132,6 +141,7 @@ def es_buck(air_temperature):
     Union[array, float] : saturated vapour pressure [Pa]
 
     """
+    air_temperature = _as_array(air_temperature)
     return 611.21*np.exp((18.678-air_temperature/234.5)*(air_temperature/(257.14+air_temperature)))
 
 def delta_calc(air_temperature):
@@ -157,6 +167,7 @@ def delta_calc(air_temperature):
     -------
     ndarray
     """
+    air_temperature = _as_array(air_temperature)
 
     # calculate vapour pressure in Pa
     es = es_calc(air_temperature)
@@ -188,6 +199,8 @@ def ea_calc(air_temperature, relative_humidity):
     -------
     Union[ndarray, float] : actual vapour pressure [Pa]
     """
+    air_temperature = _as_array(air_temperature)
+    relative_humidity = _as_array(relative_humidity)
 
     # Calculate saturation vapour pressures
     es = es_calc(air_temperature)
@@ -221,6 +234,8 @@ def vpd_calc(air_temperature, relative_humidity):
     -------
     Union[ndarray, float] : Vapour pressure deficit [Pa]
     """
+    air_temperature = _as_array(air_temperature)
+    relative_humidity = _as_array(relative_humidity)
 
     # Calculate saturation vapour pressures
     es = es_calc(air_temperature)
@@ -257,6 +272,7 @@ def latent_heat_lambda(air_temperature):
     -------
     ndarray
     """
+    air_temperature = _as_array(air_temperature)
 
     # Calculate lambda
     return 4185.5 * (751.78 - 0.5655 * (air_temperature + 273.15))  # in J/kg
@@ -288,6 +304,9 @@ def specific_heat_cp(air_temperature, relative_humidity, air_pressure):
     -------
     Union[ndarray, float] : specific heat of air c_p [J/kg/K]
     """
+    air_temperature = _as_array(air_temperature)
+    relative_humidity = _as_array(relative_humidity)
+    air_pressure = _as_array(air_pressure)
 
     # calculate vapour pressures
     eact = ea_calc(air_temperature, relative_humidity)
@@ -326,6 +345,9 @@ def psychrometric_gamma(air_temperature, relative_humidity, air_pressure):
     -------
     Union[ndarray, float] : psychrometric constant gamma [Pa/K]
     """
+    air_temperature = _as_array(air_temperature)
+    relative_humidity = _as_array(relative_humidity)
+    air_pressure = _as_array(air_pressure)
 
     cp = specific_heat_cp(air_temperature, relative_humidity, air_pressure)
     lamb = latent_heat_lambda(air_temperature)
@@ -363,6 +385,9 @@ def air_density_rho(air_temperature, relative_humidity, air_pressure):
     -------
     Union[ndarray, float] : density of air, rho [kg/m3]
     """
+    air_temperature = _as_array(air_temperature)
+    relative_humidity = _as_array(relative_humidity)
+    air_pressure = _as_array(air_pressure)
 
     eact = ea_calc(air_temperature, relative_humidity)
     rho = 1.201 * (290.0 * (air_pressure - 0.378 * eact)) / (1000.0 * (air_temperature + 273.15)) / 100.0
@@ -398,6 +423,9 @@ def potential_temperature_theta(air_temperature, relative_humidity, air_pressure
     -------
     Union[ndarray, float] : potential temperature of air, theta [Celsius]
     """
+    air_temperature = _as_array(air_temperature)
+    relative_humidity = _as_array(relative_humidity)
+    air_pressure = _as_array(air_pressure)
 
     # Determine cp
     cp = specific_heat_cp(air_temperature, relative_humidity, air_pressure)
@@ -422,6 +450,8 @@ def dew_point(air_temperature, relative_humidity):
     -------
     ndarray: dew point [Celsius]
     """
+    air_temperature = _as_array(air_temperature)
+    relative_humidity = _as_array(relative_humidity)
     a = 17.27
     b = 237.7
     a1 = 17.27
@@ -435,17 +465,27 @@ def dew_point(air_temperature, relative_humidity):
 
 def rho_cp_dry(air_temperature, air_pressure):
     """
+    Volumetric heat capacity of dry air, rho * cp, with rho from the ideal gas law for dry air
+    (R = 287.07 J kg-1 K-1) and a temperature-dependent cp.
+
+    Examples:
+        >>> rho_cp_dry(20.0, 101325.0)
+        1209.9...
 
     Parameters
     ----------
-    air_temperature
-    air_pressure
+    air_temperature : Union[ndarray, float]
+        Air temperature [Celsius]
+    air_pressure : Union[ndarray, float]
+        Air pressure [Pa]
 
     Returns
     -------
-
+    Union[ndarray, float] : rho * cp [J m-3 K-1]
     """
-    rho = air_temperature / (287.07 * (air_temperature + 273.15))
+    air_temperature = _as_array(air_temperature)
+    air_pressure = _as_array(air_pressure)
+    rho = air_pressure / (287.07 * (air_temperature + 273.15))
     return rho * (1002.5 + 275e-6 * np.power(air_temperature + 273.15 - 200.0, 2))
 
 
@@ -462,5 +502,8 @@ def rho_cp_moist(air_temperature, relative_humidity, air_pressure):
     -------
 
     """
+    air_temperature = _as_array(air_temperature)
+    relative_humidity = _as_array(relative_humidity)
+    air_pressure = _as_array(air_pressure)
     rho = air_density_rho(air_temperature, relative_humidity, air_pressure)
     return rho * specific_heat_cp(air_temperature, relative_humidity, air_pressure)
