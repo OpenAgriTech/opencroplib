@@ -39,7 +39,7 @@ def get_day_of_year(datetime):
 
     """
     if isinstance(datetime, pd.DatetimeIndex):
-        return datetime.dayofyear
+        return datetime.day_of_year
     else:
         year_start = dt.datetime(datetime.year, 1, 1, tzinfo=datetime.tzinfo)
         delta = (datetime - year_start)
